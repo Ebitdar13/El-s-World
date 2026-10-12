@@ -1,0 +1,869 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Recipe Press</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+/* Layout: a working kitchen ledger — recipe library on one tab, a print-shop cookbook builder with KDP specs on the other */
+:root{
+  --paper:#F6F7F3; --card:#FFFFFF; --ink:#1D2320; --muted:#5E6862; --line:#DCE1DB;
+  --accent:#2F5D50; --accent-ink:#FFFFFF; --mark:#E7B53C; --mark-soft:#FBF1D6;
+  --danger:#A23B2A; --ok:#2E7D4F;
+  --f-display:"Young Serif", Georgia, "Times New Roman", serif;
+  --f-body:"Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  --r:8px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#141816; --card:#1C211F; --ink:#E8ECE9; --muted:#9AA6A0; --line:#2E3532;
+  --accent:#7FC2AE; --accent-ink:#0F1A16; --mark:#E7B53C; --mark-soft:#3A3220;
+  --danger:#E9806C; --ok:#7CCB9A; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#141816; --card:#1C211F; --ink:#E8ECE9; --muted:#9AA6A0; --line:#2E3532;
+  --accent:#7FC2AE; --accent-ink:#0F1A16; --mark:#E7B53C; --mark-soft:#3A3220;
+  --danger:#E9806C; --ok:#7CCB9A; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{color-scheme:light}
+img{max-width:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;padding-inline:16px;padding-block:0 48px}
+.wrap{max-width:1180px;margin:0 auto}
+header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;padding-block:22px 14px;border-bottom:2px solid var(--ink)}
+.brand h1{font-family:var(--f-display);font-weight:400;font-size:clamp(28px,4vw,40px);line-height:1;margin:0;letter-spacing:-.01em}
+.brand p{margin:6px 0 0;color:var(--muted);font-size:13px}
+nav.tabs{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+nav.tabs button{font:600 13px var(--f-body);letter-spacing:.06em;text-transform:uppercase;background:none;border:0;border-bottom:3px solid transparent;color:var(--muted);padding:8px 12px;cursor:pointer}
+nav.tabs button[aria-selected="true"]{color:var(--ink);border-color:var(--mark)}
+.banner{margin-top:14px;padding:10px 12px;border-radius:var(--r);background:var(--mark-soft);font-size:14px}
+button,.btn{font:600 14px var(--f-body);border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px 14px;cursor:pointer}
+button:hover{border-color:var(--muted)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button.ghost{background:none;border-color:transparent;color:var(--muted);padding:6px 8px}
+button.danger{color:var(--danger)}
+button.danger.armed{background:var(--danger);color:var(--card);border-color:var(--danger)}
+button:disabled{opacity:.45;cursor:not-allowed}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:8px 10px;width:100%;min-width:0}
+textarea{resize:vertical;line-height:1.45}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);min-width:0}
+label.f > span.hint{font-weight:400;text-transform:none;letter-spacing:0}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-block:18px 14px}
+.toolbar input{max-width:320px}
+.toolbar select{max-width:200px}
+.toolbar .grow{flex:1}
+.count{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.rc{background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;cursor:pointer;display:flex;flex-direction:column;text-align:left;padding:0;font-weight:400}
+.rc:hover{border-color:var(--accent)}
+.rc .ph{aspect-ratio:16/9;max-width:100%;background:var(--mark-soft) center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:var(--muted);font-family:var(--f-display);font-size:34px}
+.rc .bd{padding:12px 14px 14px;display:flex;flex-direction:column;gap:6px}
+.rc h3{font-family:var(--f-display);font-weight:400;font-size:19px;line-height:1.2;margin:0;text-wrap:balance}
+.rc .meta{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.chip{display:inline-block;font:600 11px var(--f-body);letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:99px;background:var(--mark-soft);color:var(--ink)}
+.chip.ex{background:none;border:1px dashed var(--muted);color:var(--muted)}
+.empty{border:1px dashed var(--line);border-radius:var(--r);padding:36px 20px;text-align:center;color:var(--muted)}
+.empty h3{font-family:var(--f-display);font-weight:400;color:var(--ink);font-size:22px;margin:0 0 6px}
+dialog{border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);padding:0;width:min(860px,calc(100vw - 24px));max-height:calc(100vh - 32px)}
+dialog::backdrop{background:rgba(10,14,12,.5)}
+.dlg-h{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--card);z-index:1}
+.dlg-h h2{font-family:var(--f-display);font-weight:400;font-size:22px;margin:0}
+.dlg-b{padding:18px 20px;display:grid;gap:14px}
+.dlg-f{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;padding:14px 20px;border-top:1px solid var(--line);position:sticky;bottom:0;background:var(--card)}
+.row{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.two{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.import{background:var(--mark-soft);border-radius:var(--r);padding:12px;display:grid;gap:8px}
+.import p{margin:0;font-size:13px}
+.photo{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.photo img{width:120px;height:80px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+/* view mode */
+.rv h2{font-family:var(--f-display);font-weight:400;font-size:30px;line-height:1.15;margin:0;text-wrap:balance}
+.rv .lede{color:var(--muted);font-style:italic;margin:6px 0 0;max-width:65ch}
+.rv .facts{display:flex;flex-wrap:wrap;gap:18px;font-family:var(--f-mono);font-size:13px;padding-block:10px;border-block:1px solid var(--line)}
+.rv .facts b{display:block;font:600 11px var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.rv h4{font:700 12px var(--f-body);letter-spacing:.1em;text-transform:uppercase;margin:0 0 8px;color:var(--accent)}
+.rv ul,.rv ol{margin:0;padding-left:20px;max-width:65ch}
+.rv li{margin-bottom:5px}
+.rv .sub{list-style:none;margin-left:-20px;font-weight:600;margin-top:10px}
+.rv img.hero{width:100%;max-height:340px;object-fit:cover;border-radius:var(--r)}
+/* cookbooks */
+.cb-layout{display:grid;grid-template-columns:240px minmax(0,1fr);gap:20px;margin-top:18px}
+@media (max-width:760px){.cb-layout{grid-template-columns:1fr}}
+.cb-list{display:flex;flex-direction:column;gap:6px}
+.cb-list button{text-align:left;display:flex;flex-direction:column;gap:2px;font-weight:400}
+.cb-list button[aria-current="true"]{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+.cb-list b{font-family:var(--f-display);font-weight:400;font-size:16px}
+.cb-list small{font-family:var(--f-mono);color:var(--muted);font-size:11px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:18px;display:grid;gap:14px;min-width:0}
+.panel h3{font-family:var(--f-display);font-weight:400;font-size:20px;margin:0}
+.sect-h{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.chap{border:1px solid var(--line);border-radius:var(--r);padding:12px;display:grid;gap:8px}
+.chap-h{display:flex;gap:8px;align-items:center}
+.chap-h .num{font-family:var(--f-mono);font-size:12px;color:var(--muted);white-space:nowrap}
+.rlist{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.rlist li{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:6px;background:var(--paper)}
+.rlist li span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rlist li button{padding:2px 7px;font-size:13px}
+.specs{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.spec{background:var(--card);padding:10px 12px}
+.spec b{display:block;font:600 11px var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.spec span{font-family:var(--f-mono);font-size:15px;font-variant-numeric:tabular-nums}
+.note{font-size:13px;color:var(--muted);margin:0}
+.warn{color:var(--danger)}
+.okc{color:var(--ok)}
+.status{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.check{display:flex;gap:8px;align-items:center;font-size:14px}
+.check input{width:auto}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>Recipe Press</h1>
+      <p id="tagline">A family recipe collection.</p>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" id="tab-recipes" aria-selected="true">Recipes</button>
+      <button role="tab" id="tab-books" aria-selected="false" hidden>Cookbooks</button>
+      <button id="btn-signin" class="ghost">Editor sign in</button>
+    </nav>
+  </header>
+  <div class="banner" id="banner" hidden></div>
+
+  <!-- RECIPES -->
+  <section id="view-recipes">
+    <div class="toolbar">
+      <input id="q" type="search" placeholder="Search recipes, ingredients, tags">
+      <select id="fcat"><option value="">All categories</option></select>
+      <span class="count" id="rcount"></span>
+      <span class="grow"></span>
+      <button id="btn-import" class="ghost" hidden>Import backup</button>
+      <input id="import-file" type="file" accept=".json,application/json" hidden>
+      <button id="btn-export" class="ghost" hidden>Export backup</button>
+      <button id="btn-new" class="primary" hidden>New recipe</button>
+    </div>
+    <div id="rgrid" class="grid"></div>
+  </section>
+
+  <!-- COOKBOOKS -->
+  <section id="view-books" hidden>
+    <div class="cb-layout">
+      <aside>
+        <div class="cb-list" id="cblist"></div>
+        <button id="btn-newbook" class="primary" style="margin-top:10px;width:100%">New cookbook</button>
+      </aside>
+      <div id="cbeditor"></div>
+    </div>
+  </section>
+</div>
+
+<!-- Recipe dialog -->
+<dialog id="dlg">
+  <div class="dlg-h"><h2 id="dlg-title">Recipe</h2><button class="ghost" id="dlg-close" aria-label="Close">Close</button></div>
+  <div class="dlg-b" id="dlg-body"></div>
+  <div class="dlg-f" id="dlg-foot"></div>
+</dialog>
+
+<script>
+(() => {
+"use strict";
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const uid = () => Math.random().toString(36).slice(2, 10);
+
+let editKey = "";
+try { editKey = localStorage.getItem("rp-key") || ""; } catch(e){}
+let editor = false;
+async function api(method, path, body, type){
+  const headers = {};
+  if (editKey) headers.Authorization = "Bearer " + editKey;
+  let payload;
+  if (body !== undefined){ headers["Content-Type"] = type || "application/json"; payload = type ? body : JSON.stringify(body); }
+  const r = await fetch("/api/" + path, {method, headers, body: payload});
+  if (!r.ok){
+    const e = new Error(r.status === 401 ? "Sign in as an editor to make changes." : r.status === 413 ? "That file is too large." : "The server returned an error (" + r.status + ").");
+    e.code = r.status === 401 ? "unauthorized" : "server"; throw e;
+  }
+  return r.json();
+}
+// Storage adapters used by the page
+const db = { doc(p){ const [col, id] = p.split("/"); return { set: d => api("PUT", col + "/" + encodeURIComponent(id), d), delete: () => api("DELETE", col + "/" + encodeURIComponent(id)) }; } };
+async function shrinkImage(file){
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+    const scale = Math.min(1, 1800 / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement("canvas"); c.width = Math.round(img.naturalWidth * scale); c.height = Math.round(img.naturalHeight * scale);
+    const ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(img, 0, 0, c.width, c.height);
+    for (const q of [0.85, 0.75, 0.62, 0.5]){
+      const b = await new Promise(res => c.toBlob(res, "image/jpeg", q));
+      if (b && b.size < 1400000) return b;
+    }
+    throw new Error("That photo is too large even after resizing.");
+  } finally { URL.revokeObjectURL(url); }
+}
+const assets = { upload: async f => api("POST", "photos", await shrinkImage(f), "image/jpeg") };
+const downloads = { save: async ({filename, data}) => {
+  const blob = data instanceof Blob ? data : new Blob([data], {type: filename.endsWith(".json") ? "application/json" : "application/octet-stream"});
+  const u = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = u; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 10000);
+  return {status:"saved"};
+} };
+const sample = null;
+let recipes = [];       // [{id, ...data}]
+let books = [];
+let loaded = {recipes:false, books:false};
+let currentBookId = null;
+
+
+/* ---------- KDP reference data ---------- */
+const TRIMS = {
+  "5x8":[5,8], "5.25x8":[5.25,8], "5.5x8.5":[5.5,8.5], "6x9":[6,9],
+  "7x10":[7,10], "7.5x9.25":[7.5,9.25], "8x10":[8,10], "8.25x11":[8.25,11], "8.5x11":[8.5,11]
+};
+const PAPER = {
+  "bw-white":{label:"Black & white ink, white paper", t:0.002252},
+  "bw-cream":{label:"Black & white ink, cream paper", t:0.0025},
+  "std-color":{label:"Standard color ink, white paper", t:0.002252},
+  "prem-color":{label:"Premium color ink, white paper", t:0.002347}
+};
+const gutterFor = n => n <= 150 ? 0.375 : n <= 300 ? 0.5 : n <= 500 ? 0.625 : n <= 700 ? 0.75 : 0.875;
+
+/* ---------- Tabs ---------- */
+function showTab(which){
+  $("#tab-recipes").setAttribute("aria-selected", which === "recipes");
+  $("#tab-books").setAttribute("aria-selected", which === "books");
+  $("#view-recipes").hidden = which !== "recipes";
+  $("#view-books").hidden = which !== "books";
+  try { localStorage.setItem("rp-tab", which); } catch(e){}
+  if (which === "books") renderBooks();
+}
+$("#tab-recipes").onclick = () => showTab("recipes");
+$("#tab-books").onclick = () => showTab("books");
+
+
+function banner(msg){ const b = $("#banner"); b.textContent = msg; b.hidden = !msg; }
+
+/* ---------- Recipes list ---------- */
+function totalTime(r){ return [r.prepTime && "Prep " + r.prepTime, r.cookTime && "Cook " + r.cookTime].filter(Boolean).join(" · "); }
+function renderRecipes(){
+  const q = $("#q").value.trim().toLowerCase();
+  const cat = $("#fcat").value;
+  const cats = [...new Set(recipes.map(r => r.category).filter(Boolean))].sort();
+  const sel = $("#fcat"); const cur = sel.value;
+  sel.innerHTML = '<option value="">All categories</option>' + cats.map(c => `<option${c===cur?" selected":""}>${esc(c)}</option>`).join("");
+  const list = recipes.filter(r => (!cat || r.category === cat) &&
+    (!q || [r.title, r.description, r.ingredients, (r.tags||[]).join(" "), r.category].join(" ").toLowerCase().includes(q)))
+    .sort((a,b) => (a.title||"").localeCompare(b.title||""));
+  $("#rcount").textContent = `${list.length} of ${recipes.length} recipes`;
+  $("#btn-export").hidden = !editor || !recipes.length;
+  const g = $("#rgrid");
+  if (!loaded.recipes){ g.innerHTML = `<div class="empty" style="grid-column:1/-1"><h3>Opening your recipe box</h3>Recipes you save here appear as cards you can search and add to cookbooks.</div>`; return; }
+  if (!recipes.length){ g.innerHTML = `<div class="empty" style="grid-column:1/-1"><h3>No recipes yet</h3>Choose <b>New recipe</b> to type one in, or paste a recipe from anywhere and let Claude fill in the fields.</div>`; return; }
+  if (!list.length){ g.innerHTML = `<div class="empty" style="grid-column:1/-1"><h3>Nothing matches</h3>Try a different search or category.</div>`; return; }
+  g.innerHTML = list.map(r => `
+    <button class="rc" data-id="${esc(r.id)}">
+      <div class="ph" ${r.photoUrl ? `style="background-image:url('${esc(r.photoUrl)}')"` : ""}>${r.photoUrl ? "" : esc((r.title||"?").trim()[0]||"?")}</div>
+      <div class="bd">
+        <div>${r.category ? `<span class="chip">${esc(r.category)}</span> ` : ""}${r.example ? '<span class="chip ex">Example</span>' : ""}</div>
+        <h3>${esc(r.title || "Untitled recipe")}</h3>
+        <div class="meta">${esc([r.servings && "Serves " + r.servings, totalTime(r)].filter(Boolean).join(" · "))}</div>
+      </div>
+    </button>`).join("");
+  g.querySelectorAll(".rc").forEach(b => b.onclick = () => openRecipe(b.dataset.id));
+}
+$("#q").oninput = renderRecipes;
+$("#fcat").onchange = renderRecipes;
+
+/* ---------- Recipe view / edit ---------- */
+const dlg = $("#dlg");
+$("#dlg-close").onclick = () => dlg.close();
+
+function listHtml(text, ordered){
+  const lines = String(text||"").split("\n").map(s => s.trim()).filter(Boolean);
+  let out = "", n = 0;
+  for (const l of lines){
+    if (/^#/.test(l) || /:$/.test(l)) out += `<li class="sub">${esc(l.replace(/^#+\s*/,"").replace(/:$/,""))}</li>`;
+    else { n++; out += `<li>${esc(l.replace(/^\d+[.)]\s*/,""))}</li>`; }
+  }
+  return ordered ? `<ol>${out}</ol>` : `<ul>${out}</ul>`;
+}
+function openRecipe(id){
+  const r = recipes.find(x => x.id === id); if (!r) return;
+  $("#dlg-title").textContent = r.category || "Recipe";
+  $("#dlg-body").innerHTML = `<div class="rv" style="display:grid;gap:16px">
+    <div><h2>${esc(r.title)}</h2>${r.description ? `<p class="lede">${esc(r.description)}</p>` : ""}</div>
+    ${r.photoUrl ? `<img class="hero" src="${esc(r.photoUrl)}" alt="">` : ""}
+    <div class="facts">
+      ${r.servings ? `<div><b>Serves</b>${esc(r.servings)}</div>` : ""}
+      ${r.prepTime ? `<div><b>Prep</b>${esc(r.prepTime)}</div>` : ""}
+      ${r.cookTime ? `<div><b>Cook</b>${esc(r.cookTime)}</div>` : ""}
+      ${(r.tags||[]).length ? `<div><b>Tags</b>${esc(r.tags.join(", "))}</div>` : ""}
+    </div>
+    <div class="two">
+      <div><h4>Ingredients</h4>${listHtml(r.ingredients,false)}</div>
+      <div><h4>Directions</h4>${listHtml(r.steps,true)}</div>
+    </div>
+    ${r.notes ? `<div><h4>Notes</h4><p style="margin:0;max-width:65ch;white-space:pre-wrap">${esc(r.notes)}</p></div>` : ""}
+  </div>`;
+  const inBooks = books.filter(b => (b.chapters||[]).some(c => (c.recipeIds||[]).includes(id))).map(b => b.title);
+  $("#dlg-foot").innerHTML = `<span class="note">${!editor ? "" : inBooks.length ? "In: " + esc(inBooks.join(", ")) : "Not in a cookbook yet"}</span>
+    ${editor ? `<button class="primary" id="r-edit">Edit</button>` : ""}`;
+  if (editor) $("#r-edit").onclick = () => editRecipe(r);
+  if (!dlg.open) dlg.showModal();
+  dlg.scrollTop = 0;
+}
+
+function editRecipe(r){
+  const isNew = !r;
+  r = r ? {...r} : {title:"",category:"",description:"",servings:"",prepTime:"",cookTime:"",ingredients:"",steps:"",notes:"",tags:[]};
+  $("#dlg-title").textContent = isNew ? "New recipe" : "Edit recipe";
+  $("#dlg-body").innerHTML = `
+    ${sample ? `<div class="import">
+      <p><b>Paste a recipe</b> from a website, email, or your notes and Claude will fill in the fields below. Review before saving.</p>
+      <textarea id="imp" rows="4" placeholder="Paste recipe text here"></textarea>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button id="imp-go">Fill fields from text</button><span class="status" id="imp-st"></span></div>
+    </div>` : ""}
+    <label class="f">Title<input id="e-title" value="${esc(r.title)}"></label>
+    <div class="row">
+      <label class="f">Category<input id="e-cat" list="catlist" value="${esc(r.category)}" placeholder="e.g. Soups"></label>
+      <label class="f">Serves<input id="e-serv" value="${esc(r.servings)}" placeholder="4"></label>
+      <label class="f">Prep time<input id="e-prep" value="${esc(r.prepTime)}" placeholder="15 min"></label>
+      <label class="f">Cook time<input id="e-cook" value="${esc(r.cookTime)}" placeholder="1 hr"></label>
+    </div>
+    <datalist id="catlist">${[...new Set(recipes.map(x=>x.category).filter(Boolean))].map(c=>`<option value="${esc(c)}">`).join("")}</datalist>
+    <label class="f">Headnote<span class="hint">The short story or description that opens the recipe in the book.</span><textarea id="e-desc" rows="2">${esc(r.description)}</textarea></label>
+    <div class="two">
+      <label class="f">Ingredients<span class="hint">One per line. End a line with a colon for a sub-heading, e.g. "For the glaze:"</span><textarea id="e-ing" rows="10">${esc(r.ingredients)}</textarea></label>
+      <label class="f">Directions<span class="hint">One step per line. Numbers are added for you.</span><textarea id="e-steps" rows="10">${esc(r.steps)}</textarea></label>
+    </div>
+    <label class="f">Notes<span class="hint">Tips, variations, make-ahead, storage.</span><textarea id="e-notes" rows="3">${esc(r.notes)}</textarea></label>
+    <label class="f">Tags<span class="hint">Comma separated.</span><input id="e-tags" value="${esc((r.tags||[]).join(", "))}"></label>
+    ${assets ? `<div class="photo"><label class="f" style="flex:1">Photo<span class="hint">Printed above the ingredients. Large photos are resized automatically. Use a color paperback option if you include photos.</span><input id="e-photo" type="file" accept="image/*"></label>
+      ${r.photoUrl ? `<img id="e-photo-prev" src="${esc(r.photoUrl)}" alt=""><button id="e-photo-rm" class="ghost">Remove photo</button>` : `<img id="e-photo-prev" alt="" hidden>`}</div>` : ""}
+  `;
+  $("#dlg-foot").innerHTML = `${isNew ? "<span></span>" : `<button class="danger" id="e-del">Delete recipe</button>`}
+    <div style="display:flex;gap:10px;align-items:center"><span class="status" id="e-st"></span><button id="e-cancel">Cancel</button><button class="primary" id="e-save">Save recipe</button></div>`;
+  let photo = {photoId: r.photoId || null, photoUrl: r.photoUrl || null};
+  if (assets){
+    $("#e-photo").onchange = async ev => {
+      const f = ev.target.files[0]; if (!f) return;
+      $("#e-st").textContent = "Uploading photo…";
+      try { const a = await assets.upload(f); photo = {photoId:a.id, photoUrl:a.url}; const p = $("#e-photo-prev"); p.src = a.url; p.hidden = false; $("#e-st").textContent = "Photo added"; }
+      catch(e){ $("#e-st").textContent = "Photo upload failed: " + (e.message || e.code); }
+    };
+    const rm = $("#e-photo-rm"); if (rm) rm.onclick = () => { photo = {photoId:null, photoUrl:null}; $("#e-photo-prev").hidden = true; rm.hidden = true; };
+  }
+  if (sample) $("#imp-go").onclick = async () => {
+    const txt = $("#imp").value.trim(); if (!txt) return;
+    const st = $("#imp-st"); st.textContent = "Reading recipe…"; $("#imp-go").disabled = true;
+    try {
+      const out = await sample.json(`Extract the recipe below into JSON with exactly these string fields: title, category (a short cookbook chapter name such as "Breakfast", "Soups", "Mains", "Sides", "Desserts", "Breads", "Drinks"), description (1-2 sentence headnote, use the source's intro if present, else write a plain one), servings, prepTime, cookTime, ingredients (one per line separated by \\n; use a line ending in ":" for sub-groups), steps (one step per line separated by \\n, no numbering), notes, tags (comma separated). Keep the author's quantities and wording. Use "" for anything missing. Return only the JSON object.\n\nRECIPE:\n${txt}`);
+      const set = (id, v) => { if (v != null && v !== "") $(id).value = Array.isArray(v) ? v.join(id==="#e-tags"?", ":"\n") : String(v); };
+      set("#e-title", out.title); set("#e-cat", out.category); set("#e-serv", out.servings); set("#e-prep", out.prepTime); set("#e-cook", out.cookTime);
+      set("#e-desc", out.description); set("#e-ing", out.ingredients); set("#e-steps", out.steps); set("#e-notes", out.notes); set("#e-tags", out.tags);
+      st.textContent = "Filled. Check the fields, then save.";
+    } catch(e){ st.textContent = e.code === "not_granted" ? "Claude isn't available in this view." : "Couldn't read that recipe. Try pasting less surrounding text."; }
+    $("#imp-go").disabled = false;
+  };
+  $("#e-cancel").onclick = () => isNew ? dlg.close() : openRecipe(r.id);
+  const del = $("#e-del");
+  if (del) del.onclick = async () => {
+    if (!del.classList.contains("armed")){ del.classList.add("armed"); del.textContent = "Click again to delete"; return; }
+    try { await db.doc("recipes/" + r.id).delete(); recipes = recipes.filter(x => x.id !== r.id); dlg.close(); renderRecipes(); } catch(e){ $("#e-st").textContent = "Delete failed: " + e.message; }
+  };
+  $("#e-save").onclick = async () => {
+    const data = {
+      title: $("#e-title").value.trim(), category: $("#e-cat").value.trim(), servings: $("#e-serv").value.trim(),
+      prepTime: $("#e-prep").value.trim(), cookTime: $("#e-cook").value.trim(), description: $("#e-desc").value.trim(),
+      ingredients: $("#e-ing").value.trim(), steps: $("#e-steps").value.trim(), notes: $("#e-notes").value.trim(),
+      tags: $("#e-tags").value.split(",").map(s=>s.trim()).filter(Boolean), ...photo,
+      example: false, updatedAt: new Date().toISOString()
+    };
+    if (!data.title){ $("#e-st").textContent = "Give the recipe a title first."; return; }
+    if (!db){ $("#e-st").textContent = "Saving isn't available in this view."; return; }
+    $("#e-save").disabled = true; $("#e-st").textContent = "Saving…";
+    const id = isNew ? uid() + uid() : r.id;
+    try { await db.doc("recipes/" + id).set(data); recipes = upsert(recipes, {id, ...data}); openRecipe(id); renderRecipes(); }
+    catch(e){ $("#e-st").textContent = "Save failed: " + e.message; $("#e-save").disabled = false; }
+  };
+  if (!dlg.open) dlg.showModal();
+  dlg.scrollTop = 0;
+}
+function upsert(arr, item){ const i = arr.findIndex(x => x.id === item.id); const a = arr.slice(); if (i >= 0) a[i] = item; else a.push(item); return a; }
+$("#btn-new").onclick = () => editRecipe(null);
+
+$("#btn-export").onclick = async () => {
+  try { await downloads.save({filename:"recipe-press-backup.json", data: JSON.stringify({exportedAt:new Date().toISOString(), recipes, cookbooks:books}, null, 2)}); }
+  catch(e){ if (e.code !== "declined") banner("Export failed: " + e.message); }
+};
+
+/* ---------- Cookbooks ---------- */
+let saveTimer = null, saveState = "";
+function curBook(){ return books.find(b => b.id === currentBookId); }
+function queueSave(){
+  saveState = "Unsaved changes"; setSaveStatus();
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    const b = curBook(); if (!b || !db) return;
+    const {id, ...data} = b; data.updatedAt = new Date().toISOString();
+    saveState = "Saving…"; setSaveStatus();
+    try { await db.doc("cookbooks/" + id).set(data); saveState = "Saved"; }
+    catch(e){ saveState = e.code === "unauthorized" ? "Signed out: changes not saved" : "Save failed"; }
+    setSaveStatus();
+  }, 700);
+}
+function setSaveStatus(){ const el = $("#cb-save"); if (el) el.textContent = saveState; }
+
+$("#btn-newbook").onclick = () => {
+  const id = uid() + uid();
+  const b = {id, title:"Untitled Cookbook", subtitle:"", author:"", trim:"8x10", paper:"bw-white",
+    copyright:`Copyright © ${new Date().getFullYear()} by the author. All rights reserved.`, dedication:"", intro:"",
+    includeToc:true, chapters:[], updatedAt:new Date().toISOString()};
+  books.push(b); currentBookId = id; renderBooks(); queueSave();
+};
+
+function renderBooks(){
+  const list = $("#cblist");
+  if (!books.length) list.innerHTML = `<p class="note">No cookbooks yet.</p>`;
+  else {
+    if (!curBook()) currentBookId = books[0].id;
+    list.innerHTML = books.map(b => {
+      const n = (b.chapters||[]).reduce((s,c)=>s+(c.recipeIds||[]).length,0);
+      return `<button data-id="${esc(b.id)}" aria-current="${b.id===currentBookId}"><b>${esc(b.title||"Untitled")}</b><small>${n} recipes · ${esc(b.trim)} in</small></button>`;
+    }).join("");
+    list.querySelectorAll("button").forEach(x => x.onclick = () => { currentBookId = x.dataset.id; renderBooks(); });
+  }
+  renderEditor();
+}
+
+function renderEditor(){
+  const ed = $("#cbeditor");
+  const b = curBook();
+  if (!b){ ed.innerHTML = `<div class="empty"><h3>Build your first cookbook</h3>Choose <b>New cookbook</b>, pick a trim size, group recipes into chapters, and generate a print-ready interior PDF to upload to Amazon KDP.</div>`; return; }
+  const used = new Set((b.chapters||[]).flatMap(c => c.recipeIds||[]));
+  const byId = Object.fromEntries(recipes.map(r => [r.id, r]));
+  const opts = recipes.slice().sort((a,c)=>(a.title||"").localeCompare(c.title||""))
+    .map(r => `<option value="${esc(r.id)}"${used.has(r.id)?" disabled":""}>${esc(r.title)}${used.has(r.id)?" (added)":""}</option>`).join("");
+  ed.innerHTML = `
+  <div style="display:grid;gap:16px">
+    <div class="panel">
+      <div class="sect-h"><h3>Book details</h3><span class="status" id="cb-save">${esc(saveState)}</span></div>
+      <div class="row">
+        <label class="f">Title<input id="b-title" value="${esc(b.title)}"></label>
+        <label class="f">Subtitle<input id="b-sub" value="${esc(b.subtitle)}"></label>
+        <label class="f">Author name<input id="b-author" value="${esc(b.author)}"></label>
+      </div>
+      <div class="row">
+        <label class="f">Trim size (inches)<select id="b-trim">${Object.keys(TRIMS).map(k=>`<option value="${k}"${k===b.trim?" selected":""}>${k.replace("x"," × ")}</option>`).join("")}</select></label>
+        <label class="f">Ink &amp; paper<select id="b-paper">${Object.entries(PAPER).map(([k,v])=>`<option value="${k}"${k===b.paper?" selected":""}>${v.label}</option>`).join("")}</select></label>
+      </div>
+      <label class="f">Copyright page<textarea id="b-copy" rows="2">${esc(b.copyright)}</textarea></label>
+      <div class="two">
+        <label class="f">Dedication<span class="hint">Optional. Gets its own page.</span><textarea id="b-ded" rows="2">${esc(b.dedication)}</textarea></label>
+        <label class="f">Introduction<span class="hint">Optional. Starts on a right-hand page.</span><textarea id="b-intro" rows="4">${esc(b.intro)}</textarea></label>
+      </div>
+      <label class="check"><input type="checkbox" id="b-toc" ${b.includeToc!==false?"checked":""}> Include a table of contents</label>
+    </div>
+
+    <div class="panel">
+      <div class="sect-h"><h3>Chapters &amp; recipes</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button id="b-auto" title="Replace chapters with one per recipe category">Build from categories</button><button id="b-addch">Add chapter</button></div></div>
+      ${!recipes.length ? `<p class="note">Add recipes on the Recipes tab first.</p>` : ""}
+      <div id="chaps" style="display:grid;gap:10px">
+      ${(b.chapters||[]).map((c,ci) => `
+        <div class="chap" data-ci="${ci}">
+          <div class="chap-h"><span class="num">Ch. ${ci+1}</span><input class="ch-name" value="${esc(c.name)}" aria-label="Chapter name">
+            <button class="ghost ch-up" ${ci===0?"disabled":""} aria-label="Move chapter up">↑</button>
+            <button class="ghost ch-dn" ${ci===b.chapters.length-1?"disabled":""} aria-label="Move chapter down">↓</button>
+            <button class="ghost danger ch-rm" aria-label="Remove chapter">Remove</button></div>
+          <ol class="rlist">${(c.recipeIds||[]).map((rid,ri) => `<li data-ri="${ri}"><span>${esc(byId[rid]?.title || "Missing recipe")}</span>
+            <button class="ghost r-up" ${ri===0?"disabled":""} aria-label="Move up">↑</button><button class="ghost r-dn" ${ri===c.recipeIds.length-1?"disabled":""} aria-label="Move down">↓</button><button class="ghost r-rm" aria-label="Remove from chapter">✕</button></li>`).join("")}</ol>
+          <select class="ch-add"><option value="">+ Add a recipe to this chapter</option>${opts}</select>
+        </div>`).join("") || `<p class="note">No chapters yet. Use <b>Build from categories</b> to start with one chapter per recipe category.</p>`}
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="sect-h"><h3>Print specs for Amazon KDP</h3><button id="b-measure">Recalculate</button></div>
+      <div class="specs" id="specs"></div>
+      <p class="note" id="specnote"></p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <button class="primary" id="b-pdf">Generate interior PDF</button>
+        <span class="status" id="pdf-st"></span>
+      </div>
+      <p class="note">Recipes print in the order above. Each chapter opens on a right-hand page, and each recipe starts on a new page. Page count is padded to KDP's 24-page minimum with lined Notes pages. Upload the PDF as your paperback manuscript in KDP and choose "No bleed".</p>
+      <div style="border-top:1px solid var(--line);padding-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <button class="ghost danger" id="b-del">Delete cookbook</button>
+      </div>
+    </div>
+  </div>`;
+
+  const bind = (sel, key, ev="input") => $(sel).addEventListener(ev, e => { b[key] = e.target.type==="checkbox" ? e.target.checked : e.target.value; queueSave(); if (key==="title") $("#cblist").querySelector(`[aria-current="true"] b`).textContent = b.title || "Untitled"; if (key==="trim"||key==="paper") measure(); });
+  bind("#b-title","title"); bind("#b-sub","subtitle"); bind("#b-author","author");
+  bind("#b-trim","trim","change"); bind("#b-paper","paper","change");
+  bind("#b-copy","copyright"); bind("#b-ded","dedication"); bind("#b-intro","intro"); bind("#b-toc","includeToc","change");
+
+  const mutate = fn => { fn(); queueSave(); renderBooks(); };
+  $("#b-addch").onclick = () => mutate(() => { b.chapters = [...(b.chapters||[]), {id:uid(), name:"New chapter", recipeIds:[]}]; });
+  $("#b-auto").onclick = () => mutate(() => {
+    const groups = {};
+    recipes.slice().sort((a,c)=>(a.title||"").localeCompare(c.title||"")).forEach(r => { const k = r.category || "More Recipes"; (groups[k] ||= []).push(r.id); });
+    b.chapters = Object.keys(groups).sort().map(k => ({id:uid(), name:k, recipeIds:groups[k]}));
+  });
+  ed.querySelectorAll(".chap").forEach(el => {
+    const ci = +el.dataset.ci, c = b.chapters[ci];
+    el.querySelector(".ch-name").oninput = e => { c.name = e.target.value; queueSave(); };
+    el.querySelector(".ch-up").onclick = () => mutate(() => { [b.chapters[ci-1], b.chapters[ci]] = [b.chapters[ci], b.chapters[ci-1]]; });
+    el.querySelector(".ch-dn").onclick = () => mutate(() => { [b.chapters[ci+1], b.chapters[ci]] = [b.chapters[ci], b.chapters[ci+1]]; });
+    const rm = el.querySelector(".ch-rm");
+    rm.onclick = () => { if (!rm.classList.contains("armed") && c.recipeIds.length){ rm.classList.add("armed"); rm.textContent = "Confirm"; return; } mutate(() => b.chapters.splice(ci,1)); };
+    el.querySelector(".ch-add").onchange = e => { const v = e.target.value; if (v) mutate(() => c.recipeIds.push(v)); };
+    el.querySelectorAll(".rlist li").forEach(li => {
+      const ri = +li.dataset.ri, ids = c.recipeIds;
+      li.querySelector(".r-up").onclick = () => mutate(() => { [ids[ri-1], ids[ri]] = [ids[ri], ids[ri-1]]; });
+      li.querySelector(".r-dn").onclick = () => mutate(() => { [ids[ri+1], ids[ri]] = [ids[ri], ids[ri+1]]; });
+      li.querySelector(".r-rm").onclick = () => mutate(() => ids.splice(ri,1));
+    });
+  });
+  $("#b-measure").onclick = measure;
+  $("#b-pdf").onclick = generatePdf;
+  const del = $("#b-del");
+  del.onclick = async () => {
+    if (!del.classList.contains("armed")){ del.classList.add("armed"); del.textContent = "Click again to delete this cookbook"; return; }
+    clearTimeout(saveTimer);
+    try { if (db) await db.doc("cookbooks/" + b.id).delete(); } catch(e){}
+    books = books.filter(x => x.id !== b.id); currentBookId = null; saveState = ""; renderBooks();
+  };
+  measure();
+}
+
+/* ---------- Specs ---------- */
+let lastLayout = null;
+function measure(){
+  const b = curBook(); if (!b) return;
+  const specs = $("#specs"); if (!specs) return;
+  if (!window.jspdf){ specs.innerHTML = `<div class="spec"><b>Layout engine</b><span>Loading…</span></div>`; setTimeout(measure, 800); return; }
+  let res;
+  try { res = buildBook(b, {dry:true}); } catch(e){ specs.innerHTML = `<div class="spec"><b>Error</b><span>${esc(e.message)}</span></div>`; return; }
+  lastLayout = res;
+  const [w,h] = TRIMS[b.trim] || [8,10];
+  const pages = res.pages, paper = PAPER[b.paper] || PAPER["bw-white"];
+  const spine = pages * paper.t;
+  const coverW = 0.125 + w + spine + w + 0.125, coverH = h + 0.25;
+  const nRec = (b.chapters||[]).reduce((s,c)=>s+(c.recipeIds||[]).length,0);
+  const cell = (k,v) => `<div class="spec"><b>${k}</b><span>${v}</span></div>`;
+  specs.innerHTML = cell("Trim", `${w}" × ${h}"`) + cell("Recipes", nRec) + cell("Interior pages", pages + (res.padded ? ` <small class="note">(${res.padded} notes)</small>` : "")) +
+    cell("Inside (gutter) margin", res.gutter.toFixed(3) + '"') + cell("Outside margin", '0.500"') + cell("Spine width", spine.toFixed(3) + '"') +
+    cell("Full cover size", `${coverW.toFixed(3)}" × ${coverH.toFixed(3)}"`) + cell("Spine text", pages >= 79 ? '<span class="okc">Allowed</span>' : '<span class="warn">Needs 79+ pages</span>');
+  const notes = [];
+  if (!nRec) notes.push("Add recipes to chapters to lay out the book.");
+  if (pages > 828) notes.push(`<span class="warn">KDP paperbacks top out at 828 pages for this paper. Split this into volumes.</span>`);
+  const hasPhotos = (b.chapters||[]).some(c => (c.recipeIds||[]).some(id => recipes.find(r=>r.id===id)?.photoId));
+  if (hasPhotos && b.paper.startsWith("bw")) notes.push("Some recipes have photos; they will print in grayscale on black & white ink.");
+  notes.push(`Cover size includes 0.125" bleed on every edge. Spine width uses KDP's ${paper.t}" per page for ${paper.label.toLowerCase()}.`);
+  $("#specnote").innerHTML = notes.join(" ");
+}
+
+/* ---------- PDF layout engine ---------- */
+const FRACT = {"⅓":"1/3","⅔":"2/3","⅛":"1/8","⅜":"3/8","⅝":"5/8","⅞":"7/8","⅕":"1/5","⅖":"2/5","⅗":"3/5","⅘":"4/5","⅙":"1/6","⅚":"5/6","⁄":"/","−":"-"," ":" "," ":" "," ":" "};
+const CP1252 = "€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ";
+function clean(s){
+  s = String(s ?? "").replace(/[⅓⅔⅛⅜⅝⅞⅕⅖⅗⅘⅙⅚⁄−   ]/g, c => FRACT[c]);
+  s = s.replace(/(\d)(1\/\d)/g, "$1 $2");
+  let out = ""; for (const ch of s){ const c = ch.codePointAt(0); if (c < 256 || CP1252.includes(ch)) out += ch; }
+  return out;
+}
+function parseLines(text){
+  return String(text||"").split("\n").map(s=>s.trim()).filter(Boolean).map(l =>
+    (/^#/.test(l) || /:$/.test(l)) ? {sub:true, t:clean(l.replace(/^#+\s*/,"").replace(/:$/,""))} : {sub:false, t:clean(l.replace(/^\d+[.)]\s*/,"").replace(/^[-•*]\s*/,""))});
+}
+
+function buildBook(book, {dry=true, images={}} = {}){
+  const byId = Object.fromEntries(recipes.map(r => [r.id, r]));
+  const chapters = (book.chapters||[]).map(c => ({name:clean(c.name||"Chapter"), recipes:(c.recipeIds||[]).map(id=>byId[id]).filter(Boolean)})).filter(c => c.recipes.length);
+  let gutter = 0.375, res = null;
+  for (let i = 0; i < 4; i++){
+    res = layout(book, chapters, gutter, dry, images);
+    const g = gutterFor(res.pages);
+    if (g === gutter) break;
+    gutter = g;
+  }
+  return res;
+}
+
+function layout(book, chapters, gutter, dry, images){
+  const {jsPDF} = window.jspdf;
+  const [W,H] = TRIMS[book.trim] || [8,10];
+  const doc = new jsPDF({unit:"in", format:[W,H], orientation: W > H ? "landscape" : "portrait", compress:true});
+  const OUT = 0.5, TOP = 0.75, BOT = 0.75;
+  const CW = W - gutter - OUT;
+  const meta = [null]; // 1-indexed page meta {num:bool, header:string|null}
+  let page = 1, y = TOP;
+  meta[1] = {num:false};
+  const xL = () => (page % 2 === 1) ? gutter : OUT; // recto: gutter on left
+  const lh = pt => pt * 1.32 / 72;
+  const font = (f, s, pt) => { doc.setFont(f, s); doc.setFontSize(pt); };
+  const color = (g) => doc.setTextColor(g, g, g);
+  function newPage(m = {num:true, header:null}){ doc.addPage([W,H], W > H ? "landscape" : "portrait"); page++; meta[page] = m; y = TOP; }
+  function toRecto(m){ newPage(m); if (page % 2 === 0){ meta[page] = {num:false}; newPage(m); } }
+  let curHeader = null;
+  function ensure(h){ if (y + h > H - BOT){ newPage({num:true, header:curHeader}); y = TOP + 0.15; } }
+  function para(text, f, s, pt, opts = {}){
+    font(f, s, pt); color(opts.gray ?? 20);
+    const indent = opts.indent || 0;
+    const lines = doc.splitTextToSize(text, CW - indent);
+    for (const ln of lines){ ensure(lh(pt)); doc.text(ln, xL() + indent, y + pt/72); y += lh(pt); }
+  }
+  const title = clean(book.title || "Untitled Cookbook");
+
+  // 1. Title page
+  font("times","bold", Math.min(34, W*5)); color(15);
+  let tl = doc.splitTextToSize(title, CW); let ty = H * 0.32;
+  tl.forEach(l => { doc.text(l, W/2, ty, {align:"center"}); ty += lh(Math.min(34, W*5)); });
+  if (book.subtitle){ font("times","italic", 15); color(60); doc.splitTextToSize(clean(book.subtitle), CW).forEach(l => { ty += 0.05; doc.text(l, W/2, ty + 0.15, {align:"center"}); ty += lh(15); }); }
+  if (book.author){ font("times","normal", 14); color(30); doc.text(clean(book.author), W/2, H * 0.8, {align:"center"}); }
+
+  // 2. Copyright page
+  newPage({num:false});
+  if (book.copyright){ font("times","normal", 9); color(60); const cl = doc.splitTextToSize(clean(book.copyright), CW); let cy = H - BOT - cl.length * lh(9); cl.forEach(l => { doc.text(l, xL(), cy); cy += lh(9); }); }
+
+  // 3. Dedication
+  if (book.dedication){ toRecto({num:false}); font("times","italic", 13); color(40); const dl = doc.splitTextToSize(clean(book.dedication), CW*0.8); let dy = H*0.35; dl.forEach(l => { doc.text(l, xL() + CW/2, dy, {align:"center"}); dy += lh(13); }); }
+
+  // 4. TOC (reserve pages)
+  let tocStart = 0, tocPages = 0;
+  const tocEntries = chapters.reduce((n,c) => n + 1 + c.recipes.length, 0);
+  if (book.includeToc !== false && chapters.length){
+    const perPage = Math.floor((H - TOP - BOT - 0.9) / lh(11));
+    tocPages = Math.max(1, Math.ceil((tocEntries + chapters.length) / perPage));
+    toRecto({num:false}); tocStart = page;
+    for (let i = 1; i < tocPages; i++) newPage({num:false});
+  }
+
+  // 5. Introduction
+  if (book.intro){
+    toRecto({num:true, header:null}); curHeader = null;
+    font("times","bold", 22); color(15); doc.text("Introduction", xL(), y + 0.3); y += 0.75;
+    clean(book.intro).split(/\n\s*\n|\n/).forEach(p => { if (p.trim()){ para(p.trim(), "times", "normal", 11.5); y += 0.1; } });
+  }
+
+  // 6. Chapters
+  const toc = [];
+  chapters.forEach((ch, ci) => {
+    toRecto({num:false}); curHeader = ch.name;
+    toc.push({chapter:true, t:ch.name, p:page});
+    font("helvetica","bold", 10); color(90);
+    doc.text(("CHAPTER " + (ci+1)).split("").join(" "), xL() + CW/2, H*0.36, {align:"center"});
+    font("times","bold", 30); color(15);
+    let cy = H*0.36 + 0.55; doc.splitTextToSize(ch.name, CW).forEach(l => { doc.text(l, xL() + CW/2, cy, {align:"center"}); cy += lh(30); });
+    doc.setDrawColor(150); doc.setLineWidth(0.01); doc.line(xL() + CW/2 - 0.5, cy + 0.05, xL() + CW/2 + 0.5, cy + 0.05);
+    font("times","italic", 11); color(70);
+    let ry = cy + 0.45; const fit = Math.max(0, Math.floor((H - BOT - ry) / lh(11)));
+    const shown = ch.recipes.length > fit ? ch.recipes.slice(0, Math.max(0, fit - 1)) : ch.recipes;
+    shown.forEach(r => { doc.text(doc.splitTextToSize(clean(r.title), CW)[0], xL() + CW/2, ry, {align:"center"}); ry += lh(11); });
+    if (shown.length < ch.recipes.length && fit > 0) doc.text(`and ${ch.recipes.length - shown.length} more`, xL() + CW/2, ry, {align:"center"});
+
+    ch.recipes.forEach(r => {
+      newPage({num:true, header:ch.name});
+      toc.push({chapter:false, t:clean(r.title), p:page});
+      // Title
+      font("times","bold", 22); color(15);
+      doc.splitTextToSize(clean(r.title), CW).forEach(l => { doc.text(l, xL(), y + 22/72); y += lh(22); });
+      y += 0.05;
+      if (r.description){ para(clean(r.description), "times", "italic", 11, {gray:60}); y += 0.05; }
+      const facts = [r.servings && "SERVES " + clean(r.servings), r.prepTime && "PREP " + clean(r.prepTime), r.cookTime && "COOK " + clean(r.cookTime)].filter(Boolean).join("     ");
+      if (facts){ ensure(0.35); font("helvetica","bold", 8); color(70); doc.text(facts.toUpperCase(), xL(), y + 0.12); y += 0.22; }
+      doc.setDrawColor(170); doc.setLineWidth(0.008); doc.line(xL(), y, xL() + CW, y); y += 0.18;
+      // Photo
+      if (r.photoId || r.photoUrl){
+        const ih = Math.min(CW * 0.62, (H - TOP - BOT) * 0.4);
+        ensure(ih + 0.1);
+        const img = images[r.id];
+        if (img) doc.addImage(img, "JPEG", xL(), y, CW, ih, undefined, "FAST");
+        else if (!dry){ doc.setFillColor(235); doc.rect(xL(), y, CW, ih, "F"); }
+        y += ih + 0.2;
+      }
+      // Ingredients
+      const ing = parseLines(r.ingredients);
+      if (ing.length){
+        ensure(0.5); font("helvetica","bold", 9); color(40); doc.text("INGREDIENTS", xL(), y + 0.12); y += 0.28;
+        ing.forEach(it => {
+          if (it.sub){ y += 0.04; para(it.t, "times", "bolditalic", 11, {gray:25}); }
+          else {
+            font("times","normal", 11); const ls = doc.splitTextToSize(it.t, CW - 0.2);
+            ls.forEach((l, i) => { ensure(lh(11)); color(20); if (i === 0){ doc.setFillColor(90); doc.circle(xL() + 0.05, y + 0.1, 0.018, "F"); } doc.text(l, xL() + 0.2, y + 11/72); y += lh(11); });
+          }
+        });
+        y += 0.18;
+      }
+      // Directions
+      const steps = parseLines(r.steps);
+      if (steps.length){
+        ensure(0.6); font("helvetica","bold", 9); color(40); doc.text("DIRECTIONS", xL(), y + 0.12); y += 0.28;
+        let n = 0;
+        steps.forEach(st => {
+          if (st.sub){ y += 0.04; para(st.t, "times", "bolditalic", 11, {gray:25}); return; }
+          n++; font("times","normal", 11); const ls = doc.splitTextToSize(st.t, CW - 0.32);
+          ensure(lh(11) * Math.min(2, ls.length));
+          ls.forEach((l, i) => { ensure(lh(11)); if (i === 0){ font("helvetica","bold", 9.5); color(40); doc.text(String(n) + ".", xL(), y + 11/72); font("times","normal", 11); } color(20); doc.text(l, xL() + 0.32, y + 11/72); y += lh(11); });
+          y += 0.07;
+        });
+        y += 0.12;
+      }
+      if (r.notes){
+        ensure(0.6); font("helvetica","bold", 9); color(40); doc.text("NOTES", xL(), y + 0.12); y += 0.28;
+        clean(r.notes).split("\n").forEach(p => { if (p.trim()) para(p.trim(), "times", "italic", 10.5, {gray:45}); });
+      }
+    });
+  });
+
+  // 7. Pad to KDP 24-page minimum with Notes pages (and even count)
+  let padded = 0;
+  const notesPage = () => { newPage({num:true, header:"Notes"}); padded++; font("times","bold", 18); color(15); doc.text("Notes", xL(), y + 0.25); doc.setDrawColor(190); doc.setLineWidth(0.006); for (let ly = y + 0.75; ly < H - BOT; ly += 0.34) doc.line(xL(), ly, xL() + CW, ly); };
+  while (page < 24) notesPage();
+  if (page % 2 === 1) notesPage();
+
+  // 8. Fill TOC
+  if (tocStart){
+    let tp = tocStart; doc.setPage(tp); let ty2 = TOP;
+    const tx = () => (tp % 2 === 1) ? gutter : OUT;
+    font("times","bold", 22); color(15); doc.text("Contents", tx(), ty2 + 0.3); ty2 += 0.8;
+    const intro = book.intro ? [{chapter:true, t:"Introduction", p:(() => { for (let i = 1; i <= page; i++) if (i > tocStart + tocPages - 1 && meta[i]?.num) return i; return 0; })()}] : [];
+    [...intro, ...toc].forEach(e => {
+      const step = lh(11) + (e.chapter ? 0.1 : 0);
+      if (ty2 + step > H - BOT){ tp++; doc.setPage(tp); ty2 = TOP; }
+      if (e.chapter) ty2 += 0.1;
+      const x0 = tx() + (e.chapter ? 0 : 0.2);
+      font("times", e.chapter ? "bold" : "normal", 11); color(e.chapter ? 15 : 35);
+      const label = doc.splitTextToSize(e.t, CW - 0.8 - (e.chapter ? 0 : 0.2))[0];
+      doc.text(label, x0, ty2 + 11/72);
+      const num = String(e.p); doc.text(num, tx() + CW, ty2 + 11/72, {align:"right"});
+      const lw = doc.getTextWidth(label), nw = doc.getTextWidth(num);
+      color(170); let dx = x0 + lw + 0.08; const dotEnd = tx() + CW - nw - 0.08;
+      if (!e.chapter) while (dx < dotEnd){ doc.text(".", dx, ty2 + 11/72); dx += 0.07; }
+      ty2 += lh(11);
+    });
+  }
+
+  // 9. Folios and running heads
+  for (let p = 1; p <= page; p++){
+    const m = meta[p]; if (!m?.num) continue;
+    doc.setPage(p);
+    const recto = p % 2 === 1, x = recto ? W - OUT : OUT, al = recto ? "right" : "left";
+    font("helvetica","normal", 8.5); color(80);
+    doc.text(String(p), x, H - 0.4, {align:al});
+    const head = recto ? (m.header || "") : title;
+    if (head){ font("helvetica","normal", 7.5); color(120); doc.text(head.toUpperCase(), x, 0.45, {align:al}); }
+  }
+  return {doc, pages: page, gutter, padded};
+}
+
+async function loadImage(url, wIn, hIn){
+  return new Promise(res => {
+    const img = new Image();
+    img.onload = () => {
+      const pxW = Math.round(wIn * 300), pxH = Math.round(hIn * 300);
+      const c = document.createElement("canvas"); c.width = pxW; c.height = pxH;
+      const ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0,0,pxW,pxH);
+      const s = Math.max(pxW / img.naturalWidth, pxH / img.naturalHeight);
+      const dw = img.naturalWidth * s, dh = img.naturalHeight * s;
+      ctx.drawImage(img, (pxW - dw)/2, (pxH - dh)/2, dw, dh);
+      try { res(c.toDataURL("image/jpeg", 0.88)); } catch(e){ res(null); }
+    };
+    img.onerror = () => res(null);
+    img.src = url;
+  });
+}
+
+async function generatePdf(){
+  const b = curBook(); if (!b) return;
+  const st = $("#pdf-st"), btn = $("#b-pdf");
+  if (!window.jspdf){ st.textContent = "The PDF engine is still loading. Try again in a moment."; return; }
+  const nRec = (b.chapters||[]).reduce((s,c)=>s+(c.recipeIds||[]).length,0);
+  if (!nRec){ st.textContent = "Add at least one recipe to a chapter first."; return; }
+  btn.disabled = true; st.textContent = "Setting pages…";
+  try {
+    const [W,H] = TRIMS[b.trim] || [8,10];
+    const dryRes = buildBook(b, {dry:true});
+    const CW = W - dryRes.gutter - 0.5, ih = Math.min(CW * 0.62, (H - 1.5) * 0.4);
+    const images = {};
+    const withPhotos = recipes.filter(r => r.photoUrl && (b.chapters||[]).some(c => (c.recipeIds||[]).includes(r.id)));
+    for (const [i, r] of withPhotos.entries()){ st.textContent = `Preparing photos ${i+1} of ${withPhotos.length}…`; const d = await loadImage(r.photoUrl, CW, ih); if (d) images[r.id] = d; }
+    st.textContent = "Writing PDF…";
+    const res = buildBook(b, {dry:false, images});
+    const blob = res.doc.output("blob");
+    const name = (b.title || "cookbook").replace(/[^\w\- ]+/g,"").trim().replace(/\s+/g,"-") + `-interior-${b.trim}.pdf`;
+    await downloads.save({filename:name, data:blob});
+    st.textContent = `Saved ${name} (${res.pages} pages, ${(blob.size/1048576).toFixed(1)} MB).`;
+  } catch(e){
+    st.textContent = e.code === "declined" ? "Download cancelled." : "Couldn't build the PDF: " + (e.message || e.code);
+  }
+  btn.disabled = false;
+}
+
+/* ---------- Sign in, import, boot ---------- */
+function applyRole(){
+  $("#tab-books").hidden = !editor;
+  $("#btn-new").hidden = !editor;
+  $("#btn-import").hidden = !editor;
+  $("#btn-signin").textContent = editor ? "Sign out" : "Editor sign in";
+  $("#tagline").textContent = editor ? "Your recipe library and a cookbook builder that sets KDP-ready paperback interiors." : "A family recipe collection.";
+  if (!editor && !$("#view-books").hidden) showTab("recipes");
+  renderRecipes();
+}
+async function loadAll(){
+  try {
+    recipes = await api("GET", "recipes"); loaded.recipes = true;
+    books = editor ? await api("GET", "cookbooks") : []; loaded.books = true;
+    banner("");
+  } catch(e){ loaded.recipes = true; banner("Couldn't load recipes. " + e.message); }
+  renderRecipes(); if (!$("#view-books").hidden) renderBooks();
+}
+$("#btn-signin").onclick = () => {
+  if (editor){ editor = false; editKey = ""; try { localStorage.removeItem("rp-key"); } catch(e){} books = []; applyRole(); return; }
+  $("#dlg-title").textContent = "Editor sign in";
+  $("#dlg-body").innerHTML = `<form id="si-form" style="display:grid;gap:12px">
+    <label class="f">Editor passphrase<input id="si-key" type="password" autocomplete="current-password"></label>
+    <p class="note">Visitors can browse recipes without signing in. The passphrase lets you add and edit recipes and build cookbooks on this device.</p>
+    <div style="display:flex;gap:10px;align-items:center"><button class="primary" type="submit">Sign in</button><span class="status" id="si-st"></span></div></form>`;
+  $("#dlg-foot").innerHTML = "";
+  $("#si-form").onsubmit = async ev => {
+    ev.preventDefault();
+    const k = $("#si-key").value.trim(); if (!k) return;
+    editKey = k; $("#si-st").textContent = "Checking…";
+    try { await api("GET", "session"); editor = true; try { localStorage.setItem("rp-key", k); } catch(e){} dlg.close(); applyRole(); loadAll(); }
+    catch(e){ editKey = ""; $("#si-st").textContent = e.code === "unauthorized" ? "That passphrase didn't match." : e.message; }
+  };
+  if (!dlg.open) dlg.showModal();
+  setTimeout(() => $("#si-key")?.focus(), 50);
+};
+$("#btn-import").onclick = () => $("#import-file").click();
+$("#import-file").onchange = async ev => {
+  const f = ev.target.files[0]; ev.target.value = ""; if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    const rs = Array.isArray(data.recipes) ? data.recipes : [], bs = Array.isArray(data.cookbooks) ? data.cookbooks : [];
+    let n = 0;
+    for (const r of rs){ const {id, photoId, photoUrl, ...rest} = r; if (!id) continue; banner(`Importing ${++n} of ${rs.length + bs.length}…`); await db.doc("recipes/" + id).set(rest); }
+    for (const b of bs){ const {id, ...rest} = b; if (!id) continue; banner(`Importing ${++n} of ${rs.length + bs.length}…`); await db.doc("cookbooks/" + id).set(rest); }
+    banner(`Imported ${rs.length} recipes and ${bs.length} cookbooks. Photos aren't included in backups; re-add them on each recipe.`);
+    await loadAll();
+  } catch(e){ banner("Import failed: " + e.message); }
+};
+renderRecipes();
+(async () => {
+  if (editKey){ try { await api("GET", "session"); editor = true; } catch(e){ editKey = ""; try { localStorage.removeItem("rp-key"); } catch(_){} } }
+  applyRole();
+  await loadAll();
+})();
+})();
+</script>
+</body>
+</html>
